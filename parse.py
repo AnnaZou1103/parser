@@ -23,6 +23,7 @@ from copy import *
 
 log = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
 
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -54,7 +55,7 @@ def parse_args() -> argparse.Namespace:
         "-v", "--verbose", dest="logging_level", action="store_const", const=logging.DEBUG
     )
     verbosity.add_argument(
-        "-q", "--quiet",   dest="logging_level", action="store_const", const=logging.WARNING
+        "-q", "--quiet", dest="logging_level", action="store_const", const=logging.WARNING
     )
 
     return parser.parse_args()
@@ -72,18 +73,26 @@ class EarleyChart:
         self.profile: CounterType[str] = Counter()
 
         self.cols: List[Agenda]
-        self._run_earley()    # run Earley's algorithm to construct self.cols
+        self._run_earley()  # run Earley's algorithm to construct self.cols
 
-    def accepted(self) -> bool:
+    def print_best_parse(self):
         """Was the sentence accepted?
         That is, does the finished chart contain an item corresponding to a parse of the sentence?
         This method answers the recognition question, but not the parsing question."""
-        for item in self.cols[-1].all():    # the last column
-            if (item.rule.lhs == self.grammar.start_symbol   # a ROOT item in this column
-                and item.next_symbol() is None               # that is complete
-                and item.start_position == 0):               # and started back at position 0
-                    return True
-        return False   # we didn't find any appropriate item
+        lowest_weight = 0
+        best_parse = None
+        for item in self.cols[-1].all():  # the last column
+            if (item.rule.lhs == self.grammar.start_symbol  # a ROOT item in this column
+                    and item.next_symbol() is None  # that is complete
+                    and item.start_position == 0):  # and started back at position 0
+                if not best_parse or item.rule.weight < lowest_weight:
+                    best_parse = item
+                    lowest_weight = item.rule.weight
+        if best_parse is not None:
+            self.print_entry(best_parse)
+            sys.stdout.write('\n')
+            print(str(lowest_weight))
+        else: print('NONE')
 
     def _run_earley(self) -> None:
         """Fill in the Earley chart."""
@@ -104,8 +113,8 @@ class EarleyChart:
                                    disable=not self.progress):
             log.debug("")
             log.debug(f"Processing items in column {i}")
-            while column:    # while agenda isn't empty
-                item = column.pop()   # dequeue the next unprocessed item
+            while column:  # while agenda isn't empty
+                item = column.pop()  # dequeue the next unprocessed item
                 next = item.next_symbol();
                 if next is None:
                     # Attach this complete constituent to its customers
@@ -134,7 +143,7 @@ class EarleyChart:
         if position < len(self.tokens) and self.tokens[position] == item.next_symbol():
             new_item = item.with_dot_advanced(item, self.tokens[position])
             self.cols[position + 1].push(new_item)
-            log.debug(f"\tScanned to get: {new_item} in column {position+1}")
+            log.debug(f"\tScanned to get: {new_item} in column {position + 1}")
             self.profile["SCAN"] += 1
 
     def _attach(self, item: Item, position: int) -> None:
@@ -142,28 +151,28 @@ class EarleyChart:
         customers' dots to create new items in this column.  (This operation is sometimes
         called "complete," but actually it attaches an item that was already complete.)
         """
-        mid = item.start_position   # start position of this item = end position of item to its left
+        mid = item.start_position  # start position of this item = end position of item to its left
         for customer in self.cols[mid].all():  # could you eliminate this inefficient linear search?
             if customer.next_symbol() == item.rule.lhs:
-                new_item = customer.with_dot_advanced(customer, item, customer.rule.weight)
+                new_item = customer.with_dot_advanced(customer, item, item.rule.weight)
                 self.cols[position].push(new_item)
                 log.debug(f"\tAttached to get: {new_item} in column {position}")
                 self.profile["ATTACH"] += 1
 
-    def print_best_parse(self):
-        lowest_weight = 0
-        best_parse = None
-        for item in self.cols[-1].all():
-            if (item.rule.lhs == self.grammar.start_symbol  # a ROOT item in this column
-                    and item.next_symbol() is None  # that is complete
-                    and item.start_position == 0):
-                if not best_parse or item.rule.weight < lowest_weight:
-                    best_parse = item
-                    lowest_weight = item.rule.weight
-
-        self.print_entry(best_parse)
-        sys.stdout.write('\n')
-        print(str(lowest_weight))
+    # def print_best_parse(self):
+    #     lowest_weight = 0
+    #     best_parse = None
+    #     for item in self.cols[-1].all():
+    #         if (item.rule.lhs == self.grammar.start_symbol  # a ROOT item in this column
+    #                 and item.next_symbol() is None  # that is complete
+    #                 and item.start_position == 0):
+    #             if not best_parse or item.rule.weight < lowest_weight:
+    #                 best_parse = item
+    #                 lowest_weight = item.rule.weight
+    #
+    #     self.print_entry(best_parse)
+    #     sys.stdout.write('\n')
+    #     print(str(lowest_weight))
 
     def print_entry(self, item):
         if type(item) is not Item:
@@ -178,6 +187,7 @@ class EarleyChart:
         elif item.previous_state:
             self.print_entry(item.previous_state)
             self.print_entry(item.new_constituent)
+
 
 class Agenda:
     """An agenda of items that need to be processed.  Newly built items 
@@ -224,9 +234,9 @@ class Agenda:
     """
 
     def __init__(self) -> None:
-        self._items: List[Item] = []       # list of all items that were *ever* pushed
+        self._items: List[Item] = []  # list of all items that were *ever* pushed
         self._index: Dict[Item, int] = {}  # stores index of an item if it was ever pushed
-        self._next = 0                     # index of first item that has not yet been popped
+        self._next = 0  # index of first item that has not yet been popped
 
         # Note: There are other possible designs.  For example, self._index doesn't really
         # have to store the index; it could be changed from a dictionary to a set.  
@@ -242,7 +252,7 @@ class Agenda:
 
     def push(self, item: Item) -> None:
         """Add (enqueue) the item, unless it was previously added."""
-        if item not in self._index:    # O(1) lookup in hash table
+        if item not in self._index:  # O(1) lookup in hash table
             self._items.append(item)
             self._index[item] = len(self._items) - 1
         else:
@@ -254,7 +264,7 @@ class Agenda:
     def pop(self) -> Item:
         """Returns one of the items that was waiting to be popped (dequeued).
         Raises IndexError if there are no items waiting."""
-        if len(self)==0:
+        if len(self) == 0:
             raise IndexError
         item = self._items[self._next]
         self._next += 1
@@ -270,13 +280,15 @@ class Agenda:
         next = self._next
         return f"{self.__class__.__name__}({self._items[:next]}; {self._items[next:]})"
 
+
 class Grammar:
     """Represents a weighted context-free grammar."""
+
     def __init__(self, start_symbol: str, *files: Path) -> None:
         """Create a grammar with the given start symbol, 
         adding rules from the specified files if any."""
         self.start_symbol = start_symbol
-        self._expansions: Dict[str, List[Rule]] = {}    # maps each LHS to the list of rules that expand it
+        self._expansions: Dict[str, List[Rule]] = {}  # maps each LHS to the list of rules that expand it
         # Read the input grammar files
         for file in files:
             self.add_rules_from_file(file)
@@ -340,7 +352,7 @@ class Rule:
         return f"{self.lhs} → {' '.join(self.rhs)}"
 
     def add_weight(self, weight):
-        return Rule(lhs=self.lhs, rhs=self.rhs, weight=self.weight+weight)
+        return Rule(lhs=self.lhs, rhs=self.rhs, weight=self.weight + weight)
 
 
 # We particularly want items to be immutable, since they will be hashed and 
@@ -354,6 +366,7 @@ class Item:
     start_position: int
     previous_state: Item = None
     new_constituent: Item = None
+
     # We don't store the end_position, which corresponds to the column
     # that the item is in, although you could store it redundantly for 
     # debugging purposes if you wanted.
@@ -371,8 +384,11 @@ class Item:
             raise IndexError("Can't advance the dot past the end of the rule")
         if weight:
             new_rule = self.rule.add_weight(weight)
-            return Item(rule=new_rule, dot_position=self.dot_position + 1, start_position=self.start_position, previous_state=previous_state, new_constituent= new_constituent)
-        else: return Item(rule=self.rule, dot_position=self.dot_position + 1, start_position=self.start_position, previous_state=previous_state, new_constituent= new_constituent)
+            return Item(rule=new_rule, dot_position=self.dot_position + 1, start_position=self.start_position,
+                        previous_state=previous_state, new_constituent=new_constituent)
+        else:
+            return Item(rule=self.rule, dot_position=self.dot_position + 1, start_position=self.start_position,
+                        previous_state=previous_state, new_constituent=new_constituent)
 
     def __repr__(self) -> str:
         """Human-readable representation string used when printing this item."""
@@ -396,18 +412,16 @@ def main():
             sentence = sentence.strip()
             if sentence != "":  # skip blank lines
                 # analyze the sentence
-                log.debug("="*70)
+                log.debug("=" * 70)
                 log.debug(f"Parsing sentence: {sentence}")
                 chart = EarleyChart(sentence.split(), grammar, progress=args.progress)
 
-                if chart.accepted():
-                    chart.print_best_parse()
-
-                else: print('NONE')
+                chart.print_best_parse()
                 log.debug(f"Profile of work done: {chart.profile}")
 
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod(verbose=False)   # run tests
+
+    doctest.testmod(verbose=False)  # run tests
     main()
