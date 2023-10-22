@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter
 from typing import Counter as CounterType, Iterable, List, Optional, Dict, Tuple
-from copy import *
 
 log = logging.getLogger(Path(__file__).stem)  # For usage, see findsim.py in earlier assignment.
 
@@ -74,6 +73,7 @@ class EarleyChart:
 
         self.cols: List[Agenda]
         self._run_earley()  # run Earley's algorithm to construct self.cols
+        self.result = ''
 
     def print_best_parse(self):
         """Was the sentence accepted?
@@ -89,10 +89,12 @@ class EarleyChart:
                     best_parse = item
                     lowest_weight = item.rule.weight
         if best_parse is not None:
-            self.print_entry(best_parse)
-            sys.stdout.write('\n')
+            self.result = ''
+            self.print_item(best_parse)
+            print(self.result.strip())
             print(str(lowest_weight))
-        else: print('NONE')
+        else:
+            print('NONE')
 
     def _run_earley(self) -> None:
         """Fill in the Earley chart."""
@@ -159,34 +161,22 @@ class EarleyChart:
                 log.debug(f"\tAttached to get: {new_item} in column {position}")
                 self.profile["ATTACH"] += 1
 
-    # def print_best_parse(self):
-    #     lowest_weight = 0
-    #     best_parse = None
-    #     for item in self.cols[-1].all():
-    #         if (item.rule.lhs == self.grammar.start_symbol  # a ROOT item in this column
-    #                 and item.next_symbol() is None  # that is complete
-    #                 and item.start_position == 0):
-    #             if not best_parse or item.rule.weight < lowest_weight:
-    #                 best_parse = item
-    #                 lowest_weight = item.rule.weight
-    #
-    #     self.print_entry(best_parse)
-    #     sys.stdout.write('\n')
-    #     print(str(lowest_weight))
-
-    def print_entry(self, item):
+    def print_item(self, item):
         if type(item) is not Item:
-            sys.stdout.write(item)
+            # sys.stdout.write(item)
+            self.result += f' {item}'
         elif not item.next_symbol():
-            sys.stdout.write('(')
-            sys.stdout.write(item.rule.lhs)
-            sys.stdout.write(' ')
-            self.print_entry(item.previous_state)
-            self.print_entry(item.new_constituent)
-            sys.stdout.write(')')
+            # sys.stdout.write('(')
+            self.result += f' ({item.rule.lhs}'
+            # sys.stdout.write(item.rule.lhs)
+            # sys.stdout.write(' ')
+            self.print_item(item.previous_state)
+            self.print_item(item.new_constituent)
+            # sys.stdout.write(')')
+            self.result += f')'
         elif item.previous_state:
-            self.print_entry(item.previous_state)
-            self.print_entry(item.new_constituent)
+            self.print_item(item.previous_state)
+            self.print_item(item.new_constituent)
 
 
 class Agenda:
@@ -398,6 +388,17 @@ class Item:
         rhs.insert(self.dot_position, DOT)
         dotted_rule = f"{self.rule.lhs} → {' '.join(rhs)}"
         return f"({self.start_position}, {dotted_rule})"  # matches notation on slides
+
+    def __key(self):
+        return self.dot_position, self.start_position, self.rule.lhs, self.rule.rhs
+
+    def __hash__(self):
+        return hash(self.__key())
+
+    def __eq__(self, other):
+        if isinstance(other, Item):
+            return self.__key() == other.__key()
+        return NotImplemented
 
 
 def main():
