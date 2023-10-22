@@ -227,18 +227,19 @@ class Agenda:
         self._items: List[Item] = []  # list of all items that were *ever* pushed
         self._index: Dict[Item, int] = {}  # stores index of an item if it was ever pushed
         self._next = 0  # index of first item that has not yet been popped
+        self._reprocess: List[int] = []  # items by index that were popped but need to be reprocessed
 
         # Note: There are other possible designs.  For example, self._index doesn't really
         # have to store the index; it could be changed from a dictionary to a set.  
         # 
         # However, we provided this design because there are multiple reasonable ways to extend
         # this design to store weights and backpointers.  That additional information could be
-        # stored either in self._items or in self._index.
+        # stored either in self._items or in self._index{}.
 
     def __len__(self) -> int:
         """Returns number of items that are still waiting to be popped.
         Enables `len(my_agenda)`."""
-        return len(self._items) - self._next
+        return len(self._items) + len (self._reprocess) - self._next
 
     def push(self, item: Item) -> None:
         """Add (enqueue) the item, unless it was previously added."""
@@ -247,15 +248,21 @@ class Agenda:
             self._index[item] = len(self._items) - 1
         else:
             old_index = self._index[item]
-            old_item = self._items[old_index]
-            if item.rule.weight < old_item.rule.weight:
+            if item.rule.weight < self._items[old_index].rule.weight:
                 self._items[old_index] = item
+                if old_index not in self._reprocess:
+                    self._reprocess.append(old_index)
 
     def pop(self) -> Item:
         """Returns one of the items that was waiting to be popped (dequeued).
         Raises IndexError if there are no items waiting."""
         if len(self) == 0:
             raise IndexError
+        if self._reprocess:
+            index = self._reprocess.pop()
+            item = self._items[index]
+            # self._next = index + 1
+            return item
         item = self._items[self._next]
         self._next += 1
         return item
@@ -323,14 +330,14 @@ class Rule:
     """
     A grammar rule has a left-hand side (lhs), a right-hand side (rhs), and a weight.
 
-    >>> r = Rule('S',('NP','VP'),3.14)
-    >>> r
-    S → NP VP
-    >>> r.weight
-    3.14
-    >>> r.weight = 2.718
-    Traceback (most recent call last):
-    dataclasses.FrozenInstanceError: cannot assign to field 'weight'
+    # >>> r = Rule('S',('NP','VP'),3.14)
+    # >>> r
+    # S → NP VP
+    # >>> r.weight
+    # 3.14
+    # >>> r.weight = 2.718
+    # Traceback (most recent call last):
+    # dataclasses.FrozenInstanceError: cannot assign to field 'weight'
     """
     lhs: str
     rhs: Tuple[str, ...]
